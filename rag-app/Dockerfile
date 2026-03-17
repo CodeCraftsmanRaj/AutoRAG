@@ -16,7 +16,7 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 
 COPY app ./app
 COPY golden_dataset.json ./golden_dataset.json
-COPY ../docs ./docs
+RUN mkdir -p /app/docs
 
 EXPOSE 8000
 

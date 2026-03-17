@@ -2,11 +2,13 @@ from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.ingest import ingest_paths
 from app.rag import get_rag_health, query_rag
 
 app = FastAPI(title="Auto-RAG Pipeline", version="0.1.0")
+Instrumentator().instrument(app).expose(app)
 
 
 class IngestRequest(BaseModel):
