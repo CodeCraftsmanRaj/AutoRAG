@@ -4,8 +4,8 @@ This service runs a RAG API with 3 endpoints: `GET /health`, `POST /ingest`, `PO
 
 ## Run / Use / Test (short)
 
-1. `cp .env.example .env` and set `OPENAI_API_KEY` (optional but recommended).
-2. `docker compose up -d --build`
+1. `cp .env.example .env` and set `GEMINI_API_KEY`.
+2. `docker compose up -d --build --force-recreate` (required after any `.env` change).
 3. Ingest docs:
   `curl -X POST http://localhost:8000/ingest -H "Content-Type: application/json" -d '{"paths":["/app/docs"],"rebuild":true}'`
 4. Ask:
@@ -13,4 +13,4 @@ This service runs a RAG API with 3 endpoints: `GET /health`, `POST /ingest`, `PO
 5. Test quality gate:
   `docker compose exec rag-app python -m app.eval`
 
-If faithfulness/composite score is below `RAG_SCORE_THRESHOLD` (default `0.75`), evaluation exits with failure.
+How it works: `/ingest` builds vectors from `docs/`, `/query` retrieves and answers with Gemini, and `app.eval` uses Gemini to score faithfulness/relevancy/context from `golden_dataset.json`; score < `RAG_SCORE_THRESHOLD` fails; if you see `401/429`, verify `GEMINI_API_KEY`, model access, quota, then recreate the container.

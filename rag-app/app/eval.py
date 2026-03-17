@@ -8,35 +8,81 @@ from typing import Any, Dict, List
 from app.rag import query_rag
 
 
-def _load_deepeval() -> Dict[str, Any]:
-	"""Lazy import to avoid editor import errors when DeepEval is not installed locally."""
-	try:
-		metrics_mod = import_module("deepeval.metrics")
-		test_case_mod = import_module("deepeval.test_case")
-	except Exception as exc:  # pragma: no cover
-		raise RuntimeError(
-			"DeepEval is required for evaluation. Install with: pip install -r requirements.txt"
-		) from exc
+DEFAULT_JUDGE_MODEL = os.getenv("EVAL_MODEL", os.getenv("LLM_MODEL", "gemini-2.0-flash"))
 
+
+def _load_symbol(module_name: str, symbol_name: str):
+	module = import_module(module_name)
+	return getattr(module, symbol_name)
+
+
+def _judge_client() -> Any:
+	if os.getenv("GEMINI_API_KEY"):
+		ChatGoogleGenerativeAI = _load_symbol("langchain_google_genai", "ChatGoogleGenerativeAI")
+		return ChatGoogleGenerativeAI(
+			model=DEFAULT_JUDGE_MODEL,
+			temperature=0,
+			google_api_key=os.getenv("GEMINI_API_KEY"),
+		)
+	if os.getenv("OPENAI_API_KEY"):
+		ChatOpenAI = _load_symbol("langchain_openai", "ChatOpenAI")
+		return ChatOpenAI(model=DEFAULT_JUDGE_MODEL, temperature=0)
+	raise SystemExit("Set GEMINI_API_KEY in .env and recreate the container before running evaluation.")
+
+
+def _extract_json(payload: str) -> Dict[str, Any]:
+	text = payload.strip()
+	if text.startswith("```"):
+		parts = text.split("```")
+		for part in parts:
+			part = part.strip()
+			if part.startswith("json"):
+				part = part[4:].strip()
+			if part.startswith("{"):
+				text = part
+				break
+	return json.loads(text)
+
+
+def _score_case(judge: Any, item: Dict[str, str], result: Dict[str, Any]) -> Dict[str, float]:
+	prompt = f"""
+You are grading a RAG system. Return only valid JSON.
+
+Question: {item['question']}
+Expected answer: {item['expected_answer']}
+Actual answer: {result['answer']}
+Retrieved contexts: {json.dumps(result['contexts'], ensure_ascii=False)}
+
+Score each metric from 0.0 to 1.0:
+- faithfulness: answer supported by retrieved context
+- answer_relevancy: answer addresses the question
+- contextual_precision: retrieved context is focused and useful
+- contextual_recall: retrieved context covers needed facts
+- contextual_relevancy: retrieved context is relevant overall
+
+Return JSON exactly in this shape:
+{{
+  "faithfulness": 0.0,
+  "answer_relevancy": 0.0,
+  "contextual_precision": 0.0,
+  "contextual_recall": 0.0,
+  "contextual_relevancy": 0.0
+}}
+"""
+	response = judge.invoke(prompt)
+	content = response.content if hasattr(response, "content") else str(response)
+	scores = _extract_json(content)
 	return {
-		"AnswerRelevancyMetric": getattr(metrics_mod, "AnswerRelevancyMetric"),
-		"ContextualPrecisionMetric": getattr(metrics_mod, "ContextualPrecisionMetric"),
-		"ContextualRecallMetric": getattr(metrics_mod, "ContextualRecallMetric"),
-		"ContextualRelevancyMetric": getattr(metrics_mod, "ContextualRelevancyMetric"),
-		"FaithfulnessMetric": getattr(metrics_mod, "FaithfulnessMetric"),
-		"LLMTestCase": getattr(test_case_mod, "LLMTestCase"),
+		"faithfulness": float(scores["faithfulness"]),
+		"answer_relevancy": float(scores["answer_relevancy"]),
+		"contextual_precision": float(scores["contextual_precision"]),
+		"contextual_recall": float(scores["contextual_recall"]),
+		"contextual_relevancy": float(scores["contextual_relevancy"]),
 	}
 
 
 def run_dataset_eval(dataset_path: str = "./golden_dataset.json", threshold: float = 0.75) -> Dict[str, float]:
-	deps = _load_deepeval()
-	FaithfulnessMetric = deps["FaithfulnessMetric"]
-	AnswerRelevancyMetric = deps["AnswerRelevancyMetric"]
-	ContextualPrecisionMetric = deps["ContextualPrecisionMetric"]
-	ContextualRecallMetric = deps["ContextualRecallMetric"]
-	ContextualRelevancyMetric = deps["ContextualRelevancyMetric"]
-	LLMTestCase = deps["LLMTestCase"]
-
+	judge = _judge_client()
 	dataset = json.loads(Path(dataset_path).read_text(encoding="utf-8"))
 
 	faithfulness_scores: List[float] = []
@@ -47,27 +93,13 @@ def run_dataset_eval(dataset_path: str = "./golden_dataset.json", threshold: flo
 
 	for item in dataset:
 		result = query_rag(item["question"], top_k=4)
-		case = LLMTestCase(
-			input=item["question"],
-			expected_output=item["expected_answer"],
-			actual_output=result["answer"],
-			retrieval_context=result["contexts"],
-		)
+		scores = _score_case(judge, item, result)
 
-		m1 = FaithfulnessMetric(threshold=threshold)
-		m2 = AnswerRelevancyMetric(threshold=threshold)
-		m3 = ContextualPrecisionMetric(threshold=threshold)
-		m4 = ContextualRecallMetric(threshold=threshold)
-		m5 = ContextualRelevancyMetric(threshold=threshold)
-
-		for metric in [m1, m2, m3, m4, m5]:
-			metric.measure(case)
-
-		faithfulness_scores.append(float(m1.score))
-		relevancy_scores.append(float(m2.score))
-		precision_scores.append(float(m3.score))
-		recall_scores.append(float(m4.score))
-		contextual_rel_scores.append(float(m5.score))
+		faithfulness_scores.append(scores["faithfulness"])
+		relevancy_scores.append(scores["answer_relevancy"])
+		precision_scores.append(scores["contextual_precision"])
+		recall_scores.append(scores["contextual_recall"])
+		contextual_rel_scores.append(scores["contextual_relevancy"])
 
 	report = {
 		"faithfulness": mean(faithfulness_scores) if faithfulness_scores else 0.0,
@@ -85,7 +117,19 @@ def run_dataset_eval(dataset_path: str = "./golden_dataset.json", threshold: flo
 if __name__ == "__main__":
 	path = os.getenv("GOLDEN_DATASET_PATH", "./golden_dataset.json")
 	threshold = float(os.getenv("RAG_SCORE_THRESHOLD", "0.75"))
-	summary = run_dataset_eval(path, threshold)
+	try:
+		summary = run_dataset_eval(path, threshold)
+	except Exception as exc:
+		msg = str(exc)
+		if "insufficient_quota" in msg or "RateLimitError" in msg or "429" in msg:
+			raise SystemExit(
+				"Evaluation failed due to provider quota/rate-limit (429). Check Gemini/OpenAI quota and recreate the container."
+			)
+		if "AuthenticationError" in msg or "401" in msg or "API key not valid" in msg:
+			raise SystemExit(
+				"Evaluation failed due to invalid/missing key in container. Check GEMINI_API_KEY in .env and recreate container."
+			)
+		raise
 	print(json.dumps(summary, indent=2))
 	if not summary["passed"]:
 		raise SystemExit(1)

@@ -1,25 +1,32 @@
 import os
 import time
+from importlib import import_module
 from pathlib import Path
 from typing import Any, Dict, List
 
-from langchain_chroma import Chroma
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_huggingface import HuggingFaceEmbeddings
-
 VECTOR_DB_PATH = os.getenv("VECTOR_DB_PATH", "./.chroma")
 COLLECTION_NAME = os.getenv("CHROMA_COLLECTION", "auto_rag")
-LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").lower()
+LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.0-flash")
+EMBEDDINGS_PROVIDER = os.getenv("EMBEDDINGS_PROVIDER", "huggingface").lower()
+
+
+def _load_symbol(module_name: str, symbol_name: str):
+	module = import_module(module_name)
+	return getattr(module, symbol_name)
 
 
 def _embeddings():
-	"""Prefer OpenAI embeddings; fallback to local HF embeddings for local/minikube runs."""
-	if os.getenv("OPENAI_API_KEY"):
+	"""Use local embeddings by default; OpenAI only when explicitly requested."""
+	if EMBEDDINGS_PROVIDER == "openai" and os.getenv("OPENAI_API_KEY"):
+		OpenAIEmbeddings = _load_symbol("langchain_openai", "OpenAIEmbeddings")
 		return OpenAIEmbeddings(model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"))
+	HuggingFaceEmbeddings = _load_symbol("langchain_huggingface", "HuggingFaceEmbeddings")
 	return HuggingFaceEmbeddings(model_name=os.getenv("HF_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"))
 
 
-def _vectorstore() -> Chroma:
+def _vectorstore():
+	Chroma = _load_symbol("langchain_chroma", "Chroma")
 	Path(VECTOR_DB_PATH).mkdir(parents=True, exist_ok=True)
 	return Chroma(
 		collection_name=COLLECTION_NAME,
@@ -35,6 +42,7 @@ def get_rag_health() -> Dict[str, Any]:
 		"collection": COLLECTION_NAME,
 		"vector_db_path": VECTOR_DB_PATH,
 		"chunks": count,
+		"llm_provider": LLM_PROVIDER,
 		"llm_model": LLM_MODEL,
 	}
 
@@ -69,15 +77,32 @@ def query_rag(question: str, top_k: int = 4, namespace: str = "default") -> Dict
 			"namespace": namespace,
 		}
 
-	if os.getenv("OPENAI_API_KEY"):
-		llm = ChatOpenAI(model=LLM_MODEL, temperature=0)
-		prompt = _build_prompt(question, contexts)
-		output = llm.invoke(prompt)
-		answer = output.content if hasattr(output, "content") else str(output)
+	if LLM_PROVIDER == "gemini" and os.getenv("GEMINI_API_KEY"):
+		try:
+			ChatGoogleGenerativeAI = _load_symbol("langchain_google_genai", "ChatGoogleGenerativeAI")
+			llm = ChatGoogleGenerativeAI(
+				model=LLM_MODEL,
+				temperature=0,
+				google_api_key=os.getenv("GEMINI_API_KEY"),
+			)
+			prompt = _build_prompt(question, contexts)
+			output = llm.invoke(prompt)
+			answer = output.content if hasattr(output, "content") else str(output)
+		except Exception:
+			answer = "Gemini generation unavailable (auth/quota/model issue). Top retrieved context: " + contexts[0][:400]
+	elif os.getenv("OPENAI_API_KEY"):
+		try:
+			ChatOpenAI = _load_symbol("langchain_openai", "ChatOpenAI")
+			llm = ChatOpenAI(model=LLM_MODEL, temperature=0)
+			prompt = _build_prompt(question, contexts)
+			output = llm.invoke(prompt)
+			answer = output.content if hasattr(output, "content") else str(output)
+		except Exception:
+			answer = "LLM generation unavailable (auth/quota/model issue). Top retrieved context: " + contexts[0][:400]
 	else:
 		# Local fallback when no API key is provided.
 		answer = (
-			"OPENAI_API_KEY is not set. "
+			"No LLM key is set. "
 			"Top retrieved context: " + contexts[0][:400]
 		)
 

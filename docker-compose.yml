@@ -1,16 +1,20 @@
-version: "3.9"
-
 services:
   rag-app:
     build:
       context: ./rag-app
       dockerfile: Dockerfile
     container_name: auto-rag-app
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_API_KEY: ${GEMINI_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      LLM_MODEL: ${LLM_MODEL:-gemini-2.0-flash}
+      EMBEDDINGS_PROVIDER: ${EMBEDDINGS_PROVIDER:-huggingface}
       VECTOR_DB_PATH: /data/chroma
       RAG_SCORE_THRESHOLD: ${RAG_SCORE_THRESHOLD:-0.75}
     volumes:
