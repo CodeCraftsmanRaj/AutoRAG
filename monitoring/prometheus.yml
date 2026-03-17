@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: auto-rag-app
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["auto-rag.rag.svc.cluster.local:80"]
+
+  - job_name: kube-state-metrics
+    static_configs:
+      - targets: ["kube-state-metrics.kube-system.svc.cluster.local:8080"]
+

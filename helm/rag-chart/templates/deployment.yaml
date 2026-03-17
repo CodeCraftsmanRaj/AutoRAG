@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "rag-chart.fullname" . }}-rag
+  labels:
+    app.kubernetes.io/name: {{ include "rag-chart.name" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "rag-chart.name" . }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "rag-chart.name" . }}
+    spec:
+      containers:
+        - name: rag
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8000
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rag-chart.fullname" . }}-secrets
+                  key: OPENAI_API_KEY
+            - name: VECTOR_DB_PATH
+              value: {{ .Values.env.vectorDbPath | quote }}
+            - name: LLM_MODEL
+              value: {{ .Values.env.llmModel | quote }}
+          volumeMounts:
+            - name: vectordb
+              mountPath: /data/chroma
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 15
+      volumes:
+        - name: vectordb
+          persistentVolumeClaim:
+            claimName: {{ include "rag-chart.fullname" . }}-pvc
+

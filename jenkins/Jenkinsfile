@@ -1,0 +1,133 @@
+@Library('rag-shared-lib@main') _
+
+pipeline {
+	agent any
+
+	options {
+		timestamps()
+		ansiColor('xterm')
+		disableConcurrentBuilds()
+		buildDiscarder(logRotator(numToKeepStr: '30'))
+	}
+
+	environment {
+		APP_NAME = 'auto-rag'
+		IMAGE_REPO = 'ghcr.io/your-org/auto-rag'
+		IMAGE_TAG = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : env.BUILD_ID}"
+		RAG_SCORE_THRESHOLD = '0.75'
+		HELM_RELEASE = 'auto-rag'
+		K8S_NAMESPACE = 'rag'
+		TF_DIR = 'infra/terraform'
+		PYTHONPATH = 'rag-app'
+	}
+
+	stages {
+		stage('Checkout') {
+			steps {
+				checkout scm
+			}
+		}
+
+		stage('SonarQube Scan') {
+			steps {
+				withSonarQubeEnv('sonarqube-server') {
+					sh '''
+						set -e
+						cd rag-app
+						python -m pip install --upgrade pip
+						pip install -r requirements.txt
+						sonar-scanner \
+							-Dsonar.projectKey=auto-rag \
+							-Dsonar.sources=app \
+							-Dsonar.tests=tests \
+							-Dsonar.python.version=3.11
+					'''
+				}
+			}
+		}
+
+		stage('SonarQube Quality Gate') {
+			steps {
+				timeout(time: 10, unit: 'MINUTES') {
+					waitForQualityGate abortPipeline: true
+				}
+			}
+		}
+
+		stage('Build and Push Image') {
+			steps {
+				script {
+					ragPipeline.buildAndPushImage(
+						imageRepo: env.IMAGE_REPO,
+						imageTag: env.IMAGE_TAG,
+						dockerContext: '.',
+						dockerfilePath: 'rag-app/Dockerfile',
+						credentialsId: 'ghcr-creds'
+					)
+				}
+			}
+		}
+
+		stage('RAG Evaluation Gate') {
+			steps {
+				script {
+					ragPipeline.evaluateRAG(
+						appDir: 'rag-app',
+						threshold: env.RAG_SCORE_THRESHOLD
+					)
+				}
+			}
+		}
+
+		stage('Terraform Apply (if needed)') {
+			when {
+				expression {
+					return sh(script: "git diff --name-only HEAD~1 HEAD | grep '^infra/terraform/' || true", returnStdout: true).trim()
+				}
+			}
+			steps {
+				script {
+					ragPipeline.applyTerraform(tfDir: env.TF_DIR)
+				}
+			}
+		}
+
+		stage('Deploy via Helm') {
+			steps {
+				script {
+					ragPipeline.deployHelm(
+						releaseName: env.HELM_RELEASE,
+						chartPath: 'helm/rag-chart',
+						namespace: env.K8S_NAMESPACE,
+						imageRepo: env.IMAGE_REPO,
+						imageTag: env.IMAGE_TAG
+					)
+				}
+			}
+		}
+
+		stage('Post-deploy Reindex') {
+			steps {
+				sh '''
+					set -e
+					kubectl -n ${K8S_NAMESPACE} rollout status deploy/${HELM_RELEASE}-rag --timeout=180s
+					POD=$(kubectl -n ${K8S_NAMESPACE} get pods -l app.kubernetes.io/name=rag-chart -o jsonpath='{.items[0].metadata.name}')
+					kubectl -n ${K8S_NAMESPACE} exec "$POD" -- \
+						curl -sS -X POST http://localhost:8000/ingest \
+						-H "Content-Type: application/json" \
+						-d '{"paths":["/app/docs"],"rebuild":true}'
+				'''
+			}
+		}
+	}
+
+	post {
+		success {
+			echo "Build passed and deployed: ${IMAGE_REPO}:${IMAGE_TAG}"
+		}
+		failure {
+			echo 'Build failed. Deployment blocked by quality gate(s).'
+		}
+	}
+}
+

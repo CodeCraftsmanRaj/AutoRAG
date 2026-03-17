@@ -1,0 +1,54 @@
+{
+	"title": "Auto-RAG Overview",
+	"timezone": "browser",
+	"schemaVersion": 39,
+	"version": 1,
+	"refresh": "10s",
+	"panels": [
+		{
+			"type": "timeseries",
+			"title": "RAG Query Latency (p95)",
+			"targets": [
+				{
+					"expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"auto-rag-app\"}[5m])) by (le))",
+					"refId": "A"
+				}
+			],
+			"gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+		},
+		{
+			"type": "timeseries",
+			"title": "RAG Requests / sec",
+			"targets": [
+				{
+					"expr": "sum(rate(http_requests_total{job=\"auto-rag-app\"}[1m]))",
+					"refId": "A"
+				}
+			],
+			"gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+		},
+		{
+			"type": "timeseries",
+			"title": "Pod Ready Count",
+			"targets": [
+				{
+					"expr": "sum(kube_pod_status_ready{condition=\"true\", namespace=\"rag\"})",
+					"refId": "A"
+				}
+			],
+			"gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+		},
+		{
+			"type": "timeseries",
+			"title": "Faithfulness Score (build metric)",
+			"targets": [
+				{
+					"expr": "rag_faithfulness_score",
+					"refId": "A"
+				}
+			],
+			"gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+		}
+	]
+}
+

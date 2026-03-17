@@ -1,0 +1,123 @@
+[
+	{
+		"id": "q1",
+		"question": "How do I reset my account password?",
+		"expected_answer": "Go to account settings and choose Reset Password. A verification email is then sent."
+	},
+	{
+		"id": "q2",
+		"question": "What is the support SLA for critical incidents?",
+		"expected_answer": "Critical incidents are acknowledged within 15 minutes and updated every 30 minutes."
+	},
+	{
+		"id": "q3",
+		"question": "Where can I find API rate limits?",
+		"expected_answer": "Rate limits are documented in the API guide under the Rate Limiting section."
+	},
+	{
+		"id": "q4",
+		"question": "How is customer data encrypted at rest?",
+		"expected_answer": "Customer data is encrypted at rest using AES-256 with managed KMS keys."
+	},
+	{
+		"id": "q5",
+		"question": "Do you support SSO with SAML?",
+		"expected_answer": "Yes, SSO via SAML 2.0 is supported on business and enterprise tiers."
+	},
+	{
+		"id": "q6",
+		"question": "How do I rotate API keys safely?",
+		"expected_answer": "Create a new key first, update clients, verify traffic, then revoke the old key."
+	},
+	{
+		"id": "q7",
+		"question": "What is the audit log retention period?",
+		"expected_answer": "Audit logs are retained for 365 days by default."
+	},
+	{
+		"id": "q8",
+		"question": "How do I export billing reports?",
+		"expected_answer": "Billing reports can be exported from the billing console in CSV format."
+	},
+	{
+		"id": "q9",
+		"question": "Which regions are available for deployment?",
+		"expected_answer": "Available regions include US-East, EU-West, and AP-Southeast."
+	},
+	{
+		"id": "q10",
+		"question": "How do I enable multi-factor authentication?",
+		"expected_answer": "Enable MFA in security settings and enroll an authenticator app."
+	},
+	{
+		"id": "q11",
+		"question": "Can I configure webhooks for events?",
+		"expected_answer": "Yes, webhooks are configurable in integration settings with retry policies."
+	},
+	{
+		"id": "q12",
+		"question": "How are failed background jobs retried?",
+		"expected_answer": "Failed jobs use exponential backoff with up to five retry attempts."
+	},
+	{
+		"id": "q13",
+		"question": "What is the default session timeout?",
+		"expected_answer": "The default session timeout is 30 minutes of inactivity."
+	},
+	{
+		"id": "q14",
+		"question": "Where is disaster recovery documented?",
+		"expected_answer": "Disaster recovery procedures are documented in the operations runbook."
+	},
+	{
+		"id": "q15",
+		"question": "How do I request data deletion?",
+		"expected_answer": "Submit a deletion request from privacy settings or via support."
+	},
+	{
+		"id": "q16",
+		"question": "What API authentication methods are supported?",
+		"expected_answer": "API auth supports bearer tokens and scoped service keys."
+	},
+	{
+		"id": "q17",
+		"question": "How do I increase project storage limits?",
+		"expected_answer": "Increase limits by upgrading plan or contacting support."
+	},
+	{
+		"id": "q18",
+		"question": "What happens if quota is exceeded?",
+		"expected_answer": "Requests above quota are throttled until reset or quota expansion."
+	},
+	{
+		"id": "q19",
+		"question": "How do I onboard a new team member?",
+		"expected_answer": "Invite the user, assign RBAC role, and require MFA enrollment."
+	},
+	{
+		"id": "q20",
+		"question": "Where can I view incidents and status?",
+		"expected_answer": "Use the public status page for uptime and incident history."
+	},
+	{
+		"id": "q21",
+		"question": "How do I change notification channels?",
+		"expected_answer": "Notification channels are managed in team settings, including email and webhook."
+	},
+	{
+		"id": "q22",
+		"question": "Can I use private networking?",
+		"expected_answer": "Private networking is available on enterprise plans with VPC peering options."
+	},
+	{
+		"id": "q23",
+		"question": "How often are backups created?",
+		"expected_answer": "Backups are created daily with periodic restoration tests."
+	},
+	{
+		"id": "q24",
+		"question": "How do I contact security support?",
+		"expected_answer": "Contact security support through the dedicated security email and support portal."
+	}
+]
+

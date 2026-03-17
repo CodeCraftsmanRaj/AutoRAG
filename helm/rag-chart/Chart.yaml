@@ -1,0 +1,7 @@
+apiVersion: v2
+name: rag-chart
+description: Helm chart for Auto-RAG FastAPI microservice
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
