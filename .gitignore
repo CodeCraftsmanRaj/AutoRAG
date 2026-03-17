@@ -28,3 +28,5 @@ rag-app/.qdrant/
 
 # Logs
 *.log
+
+.env
