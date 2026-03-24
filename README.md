@@ -13,4 +13,4 @@ This service runs a RAG API with 3 endpoints: `GET /health`, `POST /ingest`, `PO
 5. Test quality gate:
   `docker compose exec rag-app python -m app.eval`
 
-How it works: `/ingest` builds vectors from `docs/`, `/query` retrieves and answers with Gemini, and `app.eval` uses Gemini to score faithfulness/relevancy/context from `golden_dataset.json`; score < `RAG_SCORE_THRESHOLD` fails; if you see `401/429`, verify `GEMINI_API_KEY`, model access, quota, then recreate the container.
+How it works: `/ingest` builds vectors with Gemini embeddings from `docs/`, `/query` retrieves and answers with Gemini, and `app.eval` now runs local heuristic scoring from `golden_dataset.json` so it does not burn Gemini quota; after changing `.env`, recreate the container.

@@ -8,7 +8,7 @@ VECTOR_DB_PATH = os.getenv("VECTOR_DB_PATH", "./.chroma")
 COLLECTION_NAME = os.getenv("CHROMA_COLLECTION", "auto_rag")
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").lower()
 LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.0-flash")
-EMBEDDINGS_PROVIDER = os.getenv("EMBEDDINGS_PROVIDER", "huggingface").lower()
+EMBEDDINGS_PROVIDER = os.getenv("EMBEDDINGS_PROVIDER", "gemini").lower()
 
 
 def _load_symbol(module_name: str, symbol_name: str):
@@ -17,12 +17,24 @@ def _load_symbol(module_name: str, symbol_name: str):
 
 
 def _embeddings():
-	"""Use local embeddings by default; OpenAI only when explicitly requested."""
+	"""Prefer API embeddings over local transformer models to avoid torch/meta runtime issues."""
+	if EMBEDDINGS_PROVIDER == "gemini" and os.getenv("GEMINI_API_KEY"):
+		GoogleGenerativeAIEmbeddings = _load_symbol(
+			"langchain_google_genai",
+			"GoogleGenerativeAIEmbeddings",
+		)
+		return GoogleGenerativeAIEmbeddings(
+			model=os.getenv("EMBEDDING_MODEL", "models/text-embedding-004"),
+			google_api_key=os.getenv("GEMINI_API_KEY"),
+		)
 	if EMBEDDINGS_PROVIDER == "openai" and os.getenv("OPENAI_API_KEY"):
 		OpenAIEmbeddings = _load_symbol("langchain_openai", "OpenAIEmbeddings")
 		return OpenAIEmbeddings(model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"))
-	HuggingFaceEmbeddings = _load_symbol("langchain_huggingface", "HuggingFaceEmbeddings")
-	return HuggingFaceEmbeddings(model_name=os.getenv("HF_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"))
+	DefaultEmbeddingFunction = _load_symbol(
+		"chromadb.utils.embedding_functions",
+		"DefaultEmbeddingFunction",
+	)
+	return DefaultEmbeddingFunction()
 
 
 def _vectorstore():
@@ -61,7 +73,21 @@ def _build_prompt(question: str, contexts: List[str]) -> str:
 	)
 
 
-def query_rag(question: str, top_k: int = 4, namespace: str = "default") -> Dict[str, Any]:
+def _extractive_answer(question: str, contexts: List[str]) -> str:
+	question_terms = {term.strip("?,.!:;()[]{}\"'").lower() for term in question.split() if len(term) > 2}
+	best_line = contexts[0][:400]
+	best_score = -1
+	for context in contexts:
+		for line in context.splitlines():
+			line_terms = {term.strip("?,.!:;()[]{}\"'").lower() for term in line.split() if len(term) > 2}
+			score = len(question_terms & line_terms)
+			if score > best_score and line.strip():
+				best_score = score
+				best_line = line.strip()
+	return best_line
+
+
+def query_rag(question: str, top_k: int = 4, namespace: str = "default", use_llm: bool = True) -> Dict[str, Any]:
 	start = time.perf_counter()
 	store = _vectorstore()
 	retriever = store.as_retriever(search_kwargs={"k": top_k})
@@ -77,7 +103,9 @@ def query_rag(question: str, top_k: int = 4, namespace: str = "default") -> Dict
 			"namespace": namespace,
 		}
 
-	if LLM_PROVIDER == "gemini" and os.getenv("GEMINI_API_KEY"):
+	if not use_llm:
+		answer = _extractive_answer(question, contexts)
+	elif LLM_PROVIDER == "gemini" and os.getenv("GEMINI_API_KEY"):
 		try:
 			ChatGoogleGenerativeAI = _load_symbol("langchain_google_genai", "ChatGoogleGenerativeAI")
 			llm = ChatGoogleGenerativeAI(
