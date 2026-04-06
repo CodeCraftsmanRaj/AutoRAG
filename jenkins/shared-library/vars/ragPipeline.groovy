@@ -59,8 +59,7 @@ def evaluateRAG(Map cfg = [:]) {
 	sh """
 		set -e
 		cd ${appDir}
-		${pyCmd} -m pip install --upgrade pip
-		${pyCmd} -m pip install -r requirements.txt
+		${pyCmd} -m pip install -r requirements.txt --break-system-packages
 		export PYTHONPATH=.
 		export RAG_SCORE_THRESHOLD=${threshold}
 		${pyCmd} -m pytest -m rag_eval -q tests/test_rag.py --maxfail=1
