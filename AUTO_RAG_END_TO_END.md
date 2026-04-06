@@ -11,7 +11,13 @@ This repository automates a RAG workflow with Gemini:
 
 ## Runtime flow (current local setup)
 
-Local Docker run currently starts the RAG app service.
+Local Docker run starts the full stack services:
+
+- RAG API
+- Jenkins
+- Prometheus
+- Grafana
+- SonarQube (+ Postgres)
 
 - API: `rag-app/app/main.py`
 - Ingestion: `rag-app/app/ingest.py`
@@ -76,8 +82,12 @@ Proof checks:
 
 ## Important note about “working” state
 
-- Local Docker currently proves the RAG app path is working.
-- Jenkins/Prometheus/Grafana are configured in repo; they are “running” only after you deploy/start those services in your environment.
+- In this repository, `docker compose up -d --build` starts all local services.
+- You can validate all UIs directly on localhost:
+	- Jenkins: http://localhost:8081
+	- Prometheus: http://localhost:9090
+	- Grafana: http://localhost:3001
+	- SonarQube: http://localhost:9000
 
 ## Recommended acceptance checklist
 
