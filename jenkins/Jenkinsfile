@@ -41,13 +41,6 @@ pipeline {
 			steps {
 				script {
 					if (env.SONAR_HOST_URL?.trim() && env.SONAR_TOKEN?.trim()) {
-						// Check if Python is available
-						def pyCheck = sh(script: 'command -v python3 >/dev/null 2>&1 && echo "python3" || (command -v python >/dev/null 2>&1 && echo "python" || echo "")', returnStdout: true).trim()
-						if (!pyCheck) {
-							echo 'Skipping SonarQube scan: python runtime is not available on this Jenkins agent.'
-							env.SONAR_ENABLED = 'false'
-							return
-						}
 						// Check if sonar-scanner is available
 						if (sh(script: 'command -v sonar-scanner >/dev/null 2>&1', returnStatus: true) != 0) {
 							echo 'Skipping SonarQube scan: sonar-scanner CLI is not available on this Jenkins agent.'
@@ -57,8 +50,8 @@ pipeline {
 						sh '''
 							set -e
 							cd rag-app
-							${PY_CMD} -m pip install --upgrade pip
-							${PY_CMD} -m pip install -r requirements.txt
+							python3 -m pip install --upgrade pip
+							python3 -m pip install -r requirements.txt
 							sonar-scanner \
 								-Dsonar.projectKey=auto-rag \
 								-Dsonar.sources=app \
