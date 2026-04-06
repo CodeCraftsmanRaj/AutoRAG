@@ -17,6 +17,8 @@ pipeline {
 		K8S_NAMESPACE = 'rag'
 		TF_DIR = 'infra/terraform'
 		PYTHONPATH = 'rag-app'
+		SONAR_HOST_URL = 'http://sonarqube:9000'
+		SONAR_TOKEN = credentials('sonar-token')
 	}
 
 	stages {
