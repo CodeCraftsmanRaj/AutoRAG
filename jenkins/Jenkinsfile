@@ -153,6 +153,11 @@ pipeline {
 		}
 
 		stage('Post-deploy Reindex') {
+			when {
+				expression {
+					return sh(script: 'command -v kubectl >/dev/null 2>&1', returnStatus: true) == 0
+				}
+			}
 			steps {
 				sh '''
 					set -e
@@ -172,7 +177,7 @@ pipeline {
 			echo "Build passed and deployed: ${IMAGE_REPO}:${IMAGE_TAG}"
 		}
 		failure {
-			echo 'Build failed. Deployment blocked by quality gate(s).'
+			echo 'Build failed. Check stage logs for the exact blocking step.'
 		}
 	}
 }
