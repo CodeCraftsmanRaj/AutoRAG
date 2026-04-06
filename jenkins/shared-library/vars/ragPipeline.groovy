@@ -72,3 +72,5 @@ def deployHelm(Map cfg = [:]) {
 	"""
 }
 
+return this
+
