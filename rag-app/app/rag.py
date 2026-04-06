@@ -16,6 +16,19 @@ def _load_symbol(module_name: str, symbol_name: str):
 	return getattr(module, symbol_name)
 
 
+class _ChromaEmbeddingAdapter:
+	"""Adapt Chroma's callable embedding function to LangChain's interface."""
+
+	def __init__(self, embedding_function):
+		self._embedding_function = embedding_function
+
+	def embed_documents(self, texts: List[str]) -> List[List[float]]:
+		return self._embedding_function(texts)
+
+	def embed_query(self, text: str) -> List[float]:
+		return self._embedding_function([text])[0]
+
+
 def _embeddings():
 	"""Prefer API embeddings over local transformer models to avoid torch/meta runtime issues."""
 	if EMBEDDINGS_PROVIDER == "gemini" and os.getenv("GEMINI_API_KEY"):
@@ -34,7 +47,7 @@ def _embeddings():
 		"chromadb.utils.embedding_functions",
 		"DefaultEmbeddingFunction",
 	)
-	return DefaultEmbeddingFunction()
+	return _ChromaEmbeddingAdapter(DefaultEmbeddingFunction())
 
 
 def _vectorstore():
