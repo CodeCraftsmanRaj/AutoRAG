@@ -13,8 +13,9 @@ services:
       GOOGLE_API_KEY: ${GEMINI_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
-      LLM_MODEL: ${LLM_MODEL:-gemini-2.0-flash}
-      EMBEDDINGS_PROVIDER: ${EMBEDDINGS_PROVIDER:-huggingface}
+      LLM_MODEL: ${LLM_MODEL:-gemini-2.5-flash}
+      EMBEDDINGS_PROVIDER: ${EMBEDDINGS_PROVIDER:-gemini}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-models/gemini-embedding-001}
       VECTOR_DB_PATH: /data/chroma
       RAG_SCORE_THRESHOLD: ${RAG_SCORE_THRESHOLD:-0.75}
     volumes:

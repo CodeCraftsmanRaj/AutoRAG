@@ -1,5 +1,6 @@
 import os
 import time
+import asyncio
 from importlib import import_module
 from pathlib import Path
 from typing import Any, Dict, List
@@ -7,13 +8,21 @@ from typing import Any, Dict, List
 VECTOR_DB_PATH = os.getenv("VECTOR_DB_PATH", "./.chroma")
 COLLECTION_NAME = os.getenv("CHROMA_COLLECTION", "auto_rag")
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").lower()
-LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.0-flash")
+LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.5-flash")
 EMBEDDINGS_PROVIDER = os.getenv("EMBEDDINGS_PROVIDER", "gemini").lower()
 
 
 def _load_symbol(module_name: str, symbol_name: str):
 	module = import_module(module_name)
 	return getattr(module, symbol_name)
+
+
+def _ensure_event_loop() -> None:
+	try:
+		asyncio.get_event_loop()
+	except RuntimeError:
+		loop = asyncio.new_event_loop()
+		asyncio.set_event_loop(loop)
 
 
 class _ChromaEmbeddingAdapter:
@@ -31,23 +40,29 @@ class _ChromaEmbeddingAdapter:
 
 def _embeddings():
 	"""Prefer API embeddings over local transformer models to avoid torch/meta runtime issues."""
-	if EMBEDDINGS_PROVIDER == "gemini" and os.getenv("GEMINI_API_KEY"):
-		GoogleGenerativeAIEmbeddings = _load_symbol(
-			"langchain_google_genai",
-			"GoogleGenerativeAIEmbeddings",
-		)
-		return GoogleGenerativeAIEmbeddings(
-			model=os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001"),
-			google_api_key=os.getenv("GEMINI_API_KEY"),
-		)
-	if EMBEDDINGS_PROVIDER == "openai" and os.getenv("OPENAI_API_KEY"):
-		OpenAIEmbeddings = _load_symbol("langchain_openai", "OpenAIEmbeddings")
-		return OpenAIEmbeddings(model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"))
 	DefaultEmbeddingFunction = _load_symbol(
 		"chromadb.utils.embedding_functions",
 		"DefaultEmbeddingFunction",
 	)
-	return _ChromaEmbeddingAdapter(DefaultEmbeddingFunction())
+	default_adapter = _ChromaEmbeddingAdapter(DefaultEmbeddingFunction())
+
+	if EMBEDDINGS_PROVIDER == "gemini" and os.getenv("GEMINI_API_KEY"):
+		try:
+			_ensure_event_loop()
+			GoogleGenerativeAIEmbeddings = _load_symbol(
+				"langchain_google_genai",
+				"GoogleGenerativeAIEmbeddings",
+			)
+			return GoogleGenerativeAIEmbeddings(
+				model=os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001"),
+				google_api_key=os.getenv("GEMINI_API_KEY"),
+			)
+		except Exception:
+			return default_adapter
+	if EMBEDDINGS_PROVIDER == "openai" and os.getenv("OPENAI_API_KEY"):
+		OpenAIEmbeddings = _load_symbol("langchain_openai", "OpenAIEmbeddings")
+		return OpenAIEmbeddings(model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"))
+	return default_adapter
 
 
 def _vectorstore():
@@ -60,9 +75,19 @@ def _vectorstore():
 	)
 
 
+def _collection_count() -> int:
+	"""Get collection size without creating embedding clients."""
+	try:
+		chromadb = import_module("chromadb")
+		client = chromadb.PersistentClient(path=VECTOR_DB_PATH)
+		collection = client.get_or_create_collection(COLLECTION_NAME)
+		return int(collection.count())
+	except Exception:
+		return 0
+
+
 def get_rag_health() -> Dict[str, Any]:
-	store = _vectorstore()
-	count = store._collection.count() if store._collection else 0
+	count = _collection_count()
 	return {
 		"collection": COLLECTION_NAME,
 		"vector_db_path": VECTOR_DB_PATH,
@@ -120,6 +145,7 @@ def query_rag(question: str, top_k: int = 4, namespace: str = "default", use_llm
 		answer = _extractive_answer(question, contexts)
 	elif LLM_PROVIDER == "gemini" and os.getenv("GEMINI_API_KEY"):
 		try:
+			_ensure_event_loop()
 			ChatGoogleGenerativeAI = _load_symbol("langchain_google_genai", "ChatGoogleGenerativeAI")
 			llm = ChatGoogleGenerativeAI(
 				model=LLM_MODEL,
