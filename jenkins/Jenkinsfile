@@ -30,33 +30,73 @@ pipeline {
 			steps {
 				script {
 					ragPipeline = load 'jenkins/shared-library/vars/ragPipeline.groovy'
+					env.SONAR_ENABLED = 'false'
 				}
 			}
 		}
 
 		stage('SonarQube Scan') {
 			steps {
-				withSonarQubeEnv('sonarqube-server') {
-					sh '''
-						set -e
-						cd rag-app
-						python -m pip install --upgrade pip
-						pip install -r requirements.txt
-						sonar-scanner \
-							-Dsonar.projectKey=auto-rag \
-							-Dsonar.sources=app \
-							-Dsonar.tests=tests \
-							-Dsonar.python.version=3.11
-					'''
+				script {
+					if (env.SONAR_HOST_URL?.trim() && env.SONAR_TOKEN?.trim()) {
+						sh '''
+							set -e
+							cd rag-app
+							python -m pip install --upgrade pip
+							pip install -r requirements.txt
+							sonar-scanner \
+								-Dsonar.projectKey=auto-rag \
+								-Dsonar.sources=app \
+								-Dsonar.tests=tests \
+								-Dsonar.python.version=3.11 \
+								-Dsonar.host.url=${SONAR_HOST_URL} \
+								-Dsonar.token=${SONAR_TOKEN}
+						'''
+						env.SONAR_ENABLED = 'true'
+					} else {
+						echo 'Skipping SonarQube scan: set SONAR_HOST_URL and SONAR_TOKEN in Jenkins job environment to enable.'
+					}
 				}
 			}
 		}
 
 		stage('SonarQube Quality Gate') {
+			when {
+				expression { env.SONAR_ENABLED == 'true' }
+			}
 			steps {
-				timeout(time: 10, unit: 'MINUTES') {
-					waitForQualityGate abortPipeline: true
-				}
+				sh '''
+					set -e
+					REPORT_FILE="rag-app/.scannerwork/report-task.txt"
+					if [ ! -f "$REPORT_FILE" ]; then
+						echo "Sonar report not found: $REPORT_FILE"
+						exit 1
+					fi
+
+					CE_TASK_URL=$(grep '^ceTaskUrl=' "$REPORT_FILE" | cut -d'=' -f2-)
+					if [ -z "$CE_TASK_URL" ]; then
+						echo "ceTaskUrl not found in report-task.txt"
+						exit 1
+					fi
+
+					echo "Waiting for SonarQube compute task..."
+					for i in $(seq 1 60); do
+						STATUS=$(curl -s -u "${SONAR_TOKEN}:" "$CE_TASK_URL" | python -c 'import sys, json; print(json.load(sys.stdin)["task"]["status"])')
+						echo "CE task status: $STATUS"
+						if [ "$STATUS" = "SUCCESS" ]; then
+							break
+						fi
+						if [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "CANCELED" ]; then
+							echo "SonarQube compute task failed: $STATUS"
+							exit 1
+						fi
+						sleep 5
+					done
+
+					QG_STATUS=$(curl -s -u "${SONAR_TOKEN}:" "${SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=auto-rag" | python -c 'import sys, json; print(json.load(sys.stdin)["projectStatus"]["status"])')
+					echo "Quality Gate status: $QG_STATUS"
+					[ "$QG_STATUS" = "OK" ]
+				'''
 			}
 		}
 
