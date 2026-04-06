@@ -23,12 +23,12 @@ class QueryRequest(BaseModel):
 
 
 @app.get("/health")
-def health() -> dict:
+async def health() -> dict:
 	return {"status": "ok", **get_rag_health()}
 
 
 @app.post("/ingest")
-def ingest(req: IngestRequest) -> dict:
+async def ingest(req: IngestRequest) -> dict:
 	try:
 		result = ingest_paths(req.paths, rebuild=req.rebuild)
 		return {"status": "ingested", "details": result}
@@ -37,7 +37,7 @@ def ingest(req: IngestRequest) -> dict:
 
 
 @app.post("/query")
-def query(req: QueryRequest) -> dict:
+async def query(req: QueryRequest) -> dict:
 	try:
 		response = query_rag(question=req.question, top_k=req.top_k, namespace=req.namespace)
 		return {

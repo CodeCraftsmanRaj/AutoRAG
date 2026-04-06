@@ -37,7 +37,7 @@ def _embeddings():
 			"GoogleGenerativeAIEmbeddings",
 		)
 		return GoogleGenerativeAIEmbeddings(
-			model=os.getenv("EMBEDDING_MODEL", "models/text-embedding-004"),
+			model=os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001"),
 			google_api_key=os.getenv("GEMINI_API_KEY"),
 		)
 	if EMBEDDINGS_PROVIDER == "openai" and os.getenv("OPENAI_API_KEY"):
