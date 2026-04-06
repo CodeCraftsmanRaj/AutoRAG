@@ -1,4 +1,4 @@
-@Library('rag-shared-lib@main') _
+def ragPipeline
 
 pipeline {
 	agent any
@@ -25,6 +25,14 @@ pipeline {
 		stage('Checkout') {
 			steps {
 				checkout scm
+			}
+		}
+
+		stage('Load Shared Library Script') {
+			steps {
+				script {
+					ragPipeline = load 'jenkins/shared-library/vars/ragPipeline.groovy'
+				}
 			}
 		}
 
