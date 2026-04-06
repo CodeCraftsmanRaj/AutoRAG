@@ -106,7 +106,7 @@ pipeline {
 					ragPipeline.buildAndPushImage(
 						imageRepo: env.IMAGE_REPO,
 						imageTag: env.IMAGE_TAG,
-						dockerContext: '.',
+						dockerContext: 'rag-app',
 						dockerfilePath: 'rag-app/Dockerfile',
 						credentialsId: 'ghcr-creds'
 					)
