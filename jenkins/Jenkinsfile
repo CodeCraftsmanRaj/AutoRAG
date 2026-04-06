@@ -50,8 +50,6 @@ pipeline {
 						sh '''
 							set -e
 							cd rag-app
-							python3 -m pip install --upgrade pip --break-system-packages
-							python3 -m pip install -r requirements.txt --break-system-packages
 							sonar-scanner \
 								-Dsonar.projectKey=auto-rag \
 								-Dsonar.sources=app \
@@ -90,7 +88,7 @@ pipeline {
 
 					echo "Waiting for SonarQube compute task..."
 					for i in $(seq 1 60); do
-						STATUS=$(curl -s -u "${SONAR_TOKEN}:" "$CE_TASK_URL" | python -c 'import sys, json; print(json.load(sys.stdin)["task"]["status"])')
+						STATUS=$(curl -s -u "${SONAR_TOKEN}:" "$CE_TASK_URL" | python3 -c 'import sys, json; print(json.load(sys.stdin)["task"]["status"])')
 						echo "CE task status: $STATUS"
 						if [ "$STATUS" = "SUCCESS" ]; then
 							break
@@ -102,7 +100,7 @@ pipeline {
 						sleep 5
 					done
 
-					QG_STATUS=$(curl -s -u "${SONAR_TOKEN}:" "${SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=auto-rag" | python -c 'import sys, json; print(json.load(sys.stdin)["projectStatus"]["status"])')
+					QG_STATUS=$(curl -s -u "${SONAR_TOKEN}:" "${SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=auto-rag" | python3 -c 'import sys, json; print(json.load(sys.stdin)["projectStatus"]["status"])')
 					echo "Quality Gate status: $QG_STATUS"
 					[ "$QG_STATUS" = "OK" ]
 				'''
