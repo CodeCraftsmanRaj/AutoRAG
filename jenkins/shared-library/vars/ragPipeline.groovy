@@ -18,13 +18,21 @@ def buildAndPushImage(Map cfg = [:]) {
 	String dockerfilePath = cfg.dockerfilePath ?: 'rag-app/Dockerfile'
 	String credentialsId = cfg.credentialsId ?: 'docker-creds'
 
-	withCredentials([usernamePassword(credentialsId: credentialsId, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+	try {
+		withCredentials([usernamePassword(credentialsId: credentialsId, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+			sh """
+				set -e
+				REGISTRY=\$(echo ${imageRepo} | cut -d'/' -f1)
+				echo \"\$DOCKER_PASS\" | docker login \"\$REGISTRY\" -u \"\$DOCKER_USER\" --password-stdin
+				docker build -f ${dockerfilePath} -t ${imageRepo}:${imageTag} ${dockerContext}
+				docker push ${imageRepo}:${imageTag}
+			"""
+		}
+	} catch (Exception ex) {
+		echo "Docker credentials '${credentialsId}' not found or unusable. Building image locally without push."
 		sh """
 			set -e
-			REGISTRY=\$(echo ${imageRepo} | cut -d'/' -f1)
-			echo \"\$DOCKER_PASS\" | docker login \"\$REGISTRY\" -u \"\$DOCKER_USER\" --password-stdin
 			docker build -f ${dockerfilePath} -t ${imageRepo}:${imageTag} ${dockerContext}
-			docker push ${imageRepo}:${imageTag}
 		"""
 	}
 }
